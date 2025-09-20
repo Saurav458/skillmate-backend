@@ -19,7 +19,7 @@ export async function login(req, res) {
 
   try {
     const result = await executeQuery(
-      "SELECT * FROM users_tbl WHERE username = $1",
+      "SELECT * FROM students_tbl WHERE username = $1",
       [username]
     );
     if (result.length === 0) {
@@ -36,7 +36,7 @@ export async function login(req, res) {
 
     // generate JWT
     const token = jwt.sign(
-      { id: user.id, username: user.username },
+      { id: user.id, username: user.username, role: user.role },
       JWT_SECRET,
       { expiresIn: "3h" }
     );
@@ -56,7 +56,7 @@ export async function login(req, res) {
 }
 
 export async function signup(req, res) {
-  const { username, password } = req.body;
+  const { username, password, role } = req.body;
 
   if (!username || !password) {
     logger.notice(`Failed to signup: Missing required details`);
@@ -66,7 +66,7 @@ export async function signup(req, res) {
   try {
     // check if user exists
     const existing = await executeQuery(
-      "SELECT * FROM users_tbl WHERE username = $1",
+      "SELECT * FROM students_tbl WHERE username = $1",
       [username]
     );
 
@@ -80,9 +80,9 @@ export async function signup(req, res) {
 
     // insert into DB
     await executeCommand(
-      `INSERT INTO users_tbl (id, username, password, additional_data, created_at, updated_at)
-        VALUES (gen_random_uuid(), $1, $2, $3, NOW(), NOW())`,
-      [username, hashedPassword, JSON.stringify({})] // empty object for additional_data
+      `INSERT INTO students_tbl (id, username, password, role, additional_data, created_at, updated_at)
+        VALUES (gen_random_uuid(), $1, $2, $3, $4, NOW(), NOW())`,
+      [username, hashedPassword, role, JSON.stringify({})] // empty object for additional_data
     );
 
     logger.info(`${username} registered in database.`);

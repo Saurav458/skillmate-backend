@@ -11,7 +11,7 @@ export function homePage(req, res) {
 export async function profile(req, res) {
   try {
     const result = await executeQuery(
-      "SELECT id, username FROM users_tbl WHERE id = $1",
+      "SELECT id, username FROM students_tbl WHERE id = $1",
       [req.user.id]
     );
     logger.info(`Profile fetched successfully for user ${result[0].username}`);
