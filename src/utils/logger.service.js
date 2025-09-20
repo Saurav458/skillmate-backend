@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const ENV = process.env.ENVIRONMENT || "development";
+const ENV = process.env.ENVIRONMENT || "production";
 const LOG_FILE_PATH = path.join(process.cwd(), "logs", "app.log");
 
 // Ensure logs folder exists in dev/staging
