@@ -1,11 +1,13 @@
 import express from "express";
+import { login, logout, signup } from "../controllers/auth.js";
 
 export const authRouter = express.Router();
 
-authRouter.get("/", async (req, res) => {
-  res.json({ message: "You are at home page" });
-});
+// Signup
+authRouter.post("/signup", signup);
 
-authRouter.get("/signup", async (req, res) => {
-  res.json({ message: "You are at signup page" });
-});
+// Login
+authRouter.post("/login", login);
+
+// Logout
+authRouter.post("/logout", logout);
