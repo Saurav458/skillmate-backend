@@ -11,13 +11,13 @@ export function homePage(req, res) {
 export async function profile(req, res) {
   try {
     const user = await Student.findByPk(req.user.id, {
-      attributes: ["id", "username"],
+      attributes: ["id", "useremail"],
     });
     if (!user) {
       logger.notice(`No profile found for user id ${req.user.id}`);
       return res.status(404).json({ message: "User not found" });
     }
-    logger.info(`Profile fetched successfully for user ${user.username}`);
+    logger.info(`Profile fetched successfully for user ${user.useremail}`);
     res.json({ user });
   } catch (err) {
     logger.error("[Profile Error]", err.message);

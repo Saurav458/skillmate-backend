@@ -10,7 +10,7 @@ Student.init(
       defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
     },
-    username: {
+    useremail: {
       type: DataTypes.STRING,
       allowNull: false,
       unique: true,
@@ -27,7 +27,7 @@ Student.init(
       type: DataTypes.JSONB,
       allowNull: true,
       defaultValue: {},
-    }
+    },
   },
   {
     sequelize,
