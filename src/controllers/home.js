@@ -1,4 +1,4 @@
-import { executeQuery } from "../database/database.service.js";
+import { Student } from "../models/student.model.js";
 import { Logger } from "../utils/logger.service.js";
 
 const logger = new Logger("Home Controller");
@@ -10,12 +10,15 @@ export function homePage(req, res) {
 
 export async function profile(req, res) {
   try {
-    const result = await executeQuery(
-      "SELECT id, username FROM students_tbl WHERE id = $1",
-      [req.user.id]
-    );
-    logger.info(`Profile fetched successfully for user ${result[0].username}`);
-    res.json({ user: result[0] });
+    const user = await Student.findByPk(req.user.id, {
+      attributes: ["id", "useremail"],
+    });
+    if (!user) {
+      logger.notice(`No profile found for user id ${req.user.id}`);
+      return res.status(404).json({ message: "User not found" });
+    }
+    logger.info(`Profile fetched successfully for user ${user.useremail}`);
+    res.json({ user });
   } catch (err) {
     logger.error("[Profile Error]", err.message);
     res.status(500).json({ message: "Server error" });

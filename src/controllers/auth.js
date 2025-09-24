@@ -1,4 +1,4 @@
-import { executeQuery, executeCommand } from "../database/database.service.js";
+import { Student } from "../models/student.model.js";
 import { Logger } from "../utils/logger.service.js";
 import bcrypt from "bcrypt";
 import dotenv from "dotenv";
@@ -15,28 +15,23 @@ export function logout(req, res) {
 }
 
 export async function login(req, res) {
-  const { username, password } = req.body;
+  const { useremail, password } = req.body;
 
   try {
-    const result = await executeQuery(
-      "SELECT * FROM students_tbl WHERE username = $1",
-      [username]
-    );
-    if (result.length === 0) {
-      logger.info(`No record found in database for user ${username}`);
+    const user = await Student.findOne({ where: { useremail } });
+    if (!user) {
+      logger.info(`No record found in database for user ${useremail}`);
       return res.status(401).json({ message: "Invalid credentials" });
     }
-
-    const user = result[0];
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
-      logger.notice(`Invalid credentials for user ${username}`);
+      logger.notice(`Invalid credentials for user ${useremail}`);
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
     // generate JWT
     const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role },
+      { id: user.id, useremail: user.useremail, role: user.role },
       JWT_SECRET,
       { expiresIn: "3h" }
     );
@@ -47,31 +42,27 @@ export async function login(req, res) {
       secure: false, // true in production with HTTPS
       maxAge: 3000 * 60 * 60, // 3 hour
     });
-    logger.info(`Login success for user ${username}`);
+    logger.info(`Login success for user ${useremail}`);
     res.json({ message: "Login successful" });
   } catch (err) {
-    logger.error(`Failed to login, ${JSON.parse(err)}`);
+    logger.error(`Failed to login, ${err}`);
     res.status(500).json({ message: "Server error" });
   }
 }
 
 export async function signup(req, res) {
-  const { username, password, role } = req.body;
+  const { useremail, password, role } = req.body;
 
-  if (!username || !password) {
+  if (!useremail || !password) {
     logger.notice(`Failed to signup: Missing required details`);
-    return res.status(400).json({ message: "Username and password required" });
+    return res.status(400).json({ message: "useremail and password required" });
   }
 
   try {
     // check if user exists
-    const existing = await executeQuery(
-      "SELECT * FROM students_tbl WHERE username = $1",
-      [username]
-    );
-
-    if (existing.length > 0) {
-      logger.info(`${username} User already exists.`);
+    const existing = await Student.findOne({ where: { useremail } });
+    if (existing) {
+      logger.info(`${useremail} User already exists.`);
       return res.status(400).json({ message: "User already exists" });
     }
 
@@ -79,16 +70,17 @@ export async function signup(req, res) {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // insert into DB
-    await executeCommand(
-      `INSERT INTO students_tbl (id, username, password, role, additional_data, created_at, updated_at)
-        VALUES (gen_random_uuid(), $1, $2, $3, $4, NOW(), NOW())`,
-      [username, hashedPassword, role, JSON.stringify({})] // empty object for additional_data
-    );
+    await Student.create({
+      useremail,
+      password: hashedPassword,
+      role,
+      additional_data: { created_via: "signup" },
+    });
 
-    logger.info(`${username} registered in database.`);
+    logger.info(`${useremail} registered in database.`);
     res.json({ message: "Signup successful" });
   } catch (err) {
-    logger.error(`Failed to Signup: ${JSON.parse(err)}`);
+    logger.error(`Failed to Signup: ${err}`);
     res.status(500).json({ message: "Server error" });
   }
 }
