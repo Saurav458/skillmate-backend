@@ -1,4 +1,4 @@
-import { executeQuery, executeCommand } from "../database/database.service.js";
+import { Student } from "../models/student.model.js";
 import { Logger } from "../utils/logger.service.js";
 import bcrypt from "bcrypt";
 import dotenv from "dotenv";
@@ -18,16 +18,11 @@ export async function login(req, res) {
   const { username, password } = req.body;
 
   try {
-    const result = await executeQuery(
-      "SELECT * FROM students_tbl WHERE username = $1",
-      [username]
-    );
-    if (result.length === 0) {
+    const user = await Student.findOne({ where: { username } });
+    if (!user) {
       logger.info(`No record found in database for user ${username}`);
       return res.status(401).json({ message: "Invalid credentials" });
     }
-
-    const user = result[0];
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
       logger.notice(`Invalid credentials for user ${username}`);
@@ -65,12 +60,8 @@ export async function signup(req, res) {
 
   try {
     // check if user exists
-    const existing = await executeQuery(
-      "SELECT * FROM students_tbl WHERE username = $1",
-      [username]
-    );
-
-    if (existing.length > 0) {
+    const existing = await Student.findOne({ where: { username } });
+    if (existing) {
       logger.info(`${username} User already exists.`);
       return res.status(400).json({ message: "User already exists" });
     }
@@ -79,11 +70,12 @@ export async function signup(req, res) {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // insert into DB
-    await executeCommand(
-      `INSERT INTO students_tbl (id, username, password, role, additional_data, created_at, updated_at)
-        VALUES (gen_random_uuid(), $1, $2, $3, $4, NOW(), NOW())`,
-      [username, hashedPassword, role, JSON.stringify({})] // empty object for additional_data
-    );
+    await Student.create({
+      username,
+      password: hashedPassword,
+      role,
+      additional_data: {"created_via": "signup"}
+    });
 
     logger.info(`${username} registered in database.`);
     res.json({ message: "Signup successful" });
