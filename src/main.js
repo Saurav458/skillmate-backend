@@ -5,13 +5,13 @@ import { authRouter } from "./routers/auth.js";
 import { homeRouter } from "./routers/home.js";
 import { Logger } from "./utils/logger.service.js";
 import { logRequests } from "./middlewares/logger.middleware.js";
-import { sequelize } from "./database/sequelize.js";
+import { testConnection, sequelize } from "./database/sequelize.js";
 
 dotenv.config(); // Must be at the top
 
 const app = express();
 const logger = new Logger("Main");
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT;
 
 // Middlewares
 app.use(express.json());
@@ -26,13 +26,19 @@ app.use("/auth", authRouter);
 // Start server only after DB is ready
 const startServer = async () => {
   try {
+    await testConnection();
+    sequelize.sync({ alter: true });
     app.listen(PORT, () => {
-      logger.info(`Server running on port ${PORT}`);
+      logger.info(`✓ Server running on port ${PORT}`);
     });
   } catch (err) {
-    logger.error("Database sync failed:", err);
-    process.exit(1); // exit if DB connection fails
+    logger.error(`Failed to start server: ${err.message}`, {
+      stack: err.stack,
+    });
+    process.exit(1);
   }
 };
+
+startServer();
 
 startServer();

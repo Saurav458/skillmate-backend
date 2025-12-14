@@ -1,9 +1,0 @@
-{
-    "development": {
-        "username": "postgres",
-        "password": "skillmate",
-        "database": "postgres",
-        "host": "localhost",
-        "dialect": "postgres"
-    }
-}

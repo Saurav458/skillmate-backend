@@ -4,17 +4,20 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const ENV = process.env.ENVIRONMENT || "production";
-const LOG_FILE_PATH = path.join(process.cwd(), "logs", "app.log");
+const ENV = process.env.ENVIRONMENT || "development";
+const LOGS_DIR = path.join(process.cwd(), "logs");
 
-// Ensure logs folder exists in dev/staging
-if (ENV === "production" || ENV === "staging") {
-  const logDir = path.dirname(LOG_FILE_PATH);
-  if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+// Ensure logs folder exists
+if (!fs.existsSync(LOGS_DIR)) {
+  fs.mkdirSync(LOGS_DIR, { recursive: true });
+}
 
-  // Create file with empty array if not exists
-  if (!fs.existsSync(LOG_FILE_PATH))
-    fs.writeFileSync(LOG_FILE_PATH, "[]", "utf-8");
+// Get today's log file path (one file per day)
+function getDailyLogFilePath() {
+  const today = new Date();
+  const dateStr = today.toISOString().split("T")[0]; // YYYY-MM-DD format
+  const logFileName = `app-${dateStr}.log`;
+  return path.join(LOGS_DIR, logFileName);
 }
 
 export class Logger {
@@ -24,22 +27,28 @@ export class Logger {
 
   _formatOptional(param) {
     if (param === undefined) return null;
-
     if (param instanceof Error) {
       return { message: param.message, stack: param.stack };
     }
-
     if (typeof param === "object") return param;
-
-    return param; // string, number, boolean
+    return param;
   }
 
   _writeToFile(logObj) {
     try {
-      fs.appendFileSync(LOG_FILE_PATH, JSON.stringify(logObj) + "\n", "utf-8");
+      const logFilePath = getDailyLogFilePath();
+      const logString = JSON.stringify(logObj) + "\n";
+      fs.appendFileSync(logFilePath, logString, "utf-8");
     } catch (err) {
       console.error("Failed to write log to file:", err);
     }
+  }
+
+  _formatLogString(level, message, extra) {
+    const timestamp = new Date().toISOString();
+    return `[${timestamp}] [${level.toUpperCase()}] [${
+      this.context
+    }] ${message}${extra ? " " + JSON.stringify(extra) : ""}`;
   }
 
   log(level, message, optionalParam) {
@@ -51,21 +60,20 @@ export class Logger {
       level: level.toUpperCase(),
       context: this.context,
       message,
-      extra: extra || undefined,
+      ...(extra && { extra }),
     };
 
-    // Console output
-    const logString = `[${timestamp}] [${level.toUpperCase()}] [${
-      this.context
-    }] ${message} ${extra ? JSON.stringify(extra) : ""}`;
+    const logString = this._formatLogString(level, message, extra);
 
-    if (ENV === "production" || ENV === "staging") {
-      this._writeToFile(logObj);
-      console.log(logString);
+    // Console output
+    if (level.toLowerCase() === "error") {
+      console.error(logString);
     } else {
-      if (level.toLowerCase() === "error") console.error(logString);
-      else console.log(logString);
+      console.log(logString);
     }
+
+    // File output (always write in all environments)
+    this._writeToFile(logObj);
   }
 
   info(message, optionalParam) {
@@ -74,6 +82,10 @@ export class Logger {
 
   debug(message, optionalParam) {
     this.log("debug", message, optionalParam);
+  }
+
+  warn(message, optionalParam) {
+    this.log("warn", message, optionalParam);
   }
 
   notice(message, optionalParam) {

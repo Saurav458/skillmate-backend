@@ -16,15 +16,42 @@ const logger = new Logger("Auth Controller");
 export async function registerUser(req, res) {
   const { phone, useremail, name, role } = req.body;
 
+  logger.info(`Registration attempt initiated`, {
+    phone,
+    useremail,
+    name,
+    role,
+  });
+
   try {
+    // Validate required fields
+    if (!phone || !useremail || !name || !role) {
+      logger.warn(`Registration failed - Missing required fields`, {
+        phone,
+        useremail,
+        name,
+        role,
+      });
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: phone, useremail, name, role",
+      });
+    }
+
     const userDetail = await checkUserExists(phone);
-    if (userDetail)
+    if (userDetail) {
+      logger.warn(`Registration failed - User already exists`, {
+        phone,
+        useremail,
+      });
       return res.status(409).json({
         success: false,
         message: "User already exists.",
       });
+    }
 
     // Create user in database
+    logger.debug(`Creating new user in database`, { phone, useremail });
     const newUser = await User.create({
       phone,
       useremail,
@@ -32,8 +59,13 @@ export async function registerUser(req, res) {
       role,
       additional_data: {},
     });
+    logger.debug(`User created successfully in database`, {
+      userId: newUser.id,
+      useremail,
+    });
 
     // Generate JWT token
+    logger.debug(`Generating JWT token for user`, { userId: newUser.id });
     const token = generateToken(newUser);
 
     // Set token in cookie
@@ -42,8 +74,11 @@ export async function registerUser(req, res) {
       secure: false,
       maxAge: 3 * 60 * 60 * 1000,
     });
+    logger.debug(`JWT token set in cookie`);
 
-    logger.info(`User registered successfully: ${useremail}`);
+    logger.info(`✓ User registered successfully: ${useremail}`, {
+      userId: newUser.id,
+    });
     return res.status(201).json({
       success: true,
       message: "User registered successfully",
@@ -52,7 +87,11 @@ export async function registerUser(req, res) {
       },
     });
   } catch (error) {
-    logger.error(`Signup - Error: ${error.message}`);
+    logger.error(`Registration failed - ${error.message}`, {
+      phone,
+      useremail,
+      stack: error.stack,
+    });
     return res.status(500).json({
       success: false,
       message: "Server error",
@@ -65,13 +104,34 @@ export async function registerUser(req, res) {
 // ============================================================
 export async function getRegisteredUserDetails(req, res) {
   const { phone } = req.body;
+
+  logger.info(`User login attempt initiated`, { phone });
+
   try {
+    // Validate phone number
+    if (!phone) {
+      logger.warn(`Login failed - Phone number missing`);
+      return res.status(400).json({
+        success: false,
+        message: "Phone number is required",
+      });
+    }
+
+    logger.debug(`Checking if user exists`, { phone });
     const userDetail = await checkUserExists(phone);
-    if (!userDetail)
+
+    if (!userDetail) {
+      logger.warn(`Login failed - User not found`, { phone });
       return res.status(404).json({
         success: false,
         message: "User not found.",
       });
+    }
+
+    logger.info(`✓ User login verification successful`, {
+      phone,
+      userId: userDetail.id,
+    });
     return res.status(200).json({
       success: true,
       message: "User found",
@@ -80,7 +140,10 @@ export async function getRegisteredUserDetails(req, res) {
       },
     });
   } catch (error) {
-    logger.error(`getUserLoginDetails failed. Error: ${error.message}`);
+    logger.error(`Login verification failed - ${error.message}`, {
+      phone,
+      stack: error.stack,
+    });
     return res.status(500).json({
       success: false,
       message: "Server error",
@@ -92,10 +155,25 @@ export async function getRegisteredUserDetails(req, res) {
  * Logout user
  */
 export function logout(req, res) {
-  res.clearCookie("token");
-  logger.info(`User logged out successfully`);
-  res.status(200).json({
-    success: true,
-    message: "Logged out successfully",
-  });
+  const userId = req.user?.id;
+
+  logger.info(`User logout initiated`, { userId });
+
+  try {
+    res.clearCookie("token");
+    logger.info(`✓ User logged out successfully`, { userId });
+    res.status(200).json({
+      success: true,
+      message: "Logged out successfully",
+    });
+  } catch (error) {
+    logger.error(`Logout failed - ${error.message}`, {
+      userId,
+      stack: error.stack,
+    });
+    res.status(500).json({
+      success: false,
+      message: "Server error during logout",
+    });
+  }
 }

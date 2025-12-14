@@ -1,242 +1,789 @@
-# Skillmate-backend — Design Document
+# Rental Application — Backend API
 
 ## Project Overview
 
-Skillmate-backend is a small Node.js REST API built with Express and Sequelize for PostgreSQL. It provides user (student) registration and login, simple session management via JWT stored as an HTTP cookie, and a protected user profile endpoint. The project contains a single model (Student), basic logging, and middleware for authentication and request logging.
+Rental is a Node.js REST API built with Express and Sequelize for PostgreSQL. It provides user authentication (signup/login), session management via JWT stored as HTTP cookies, and protected user profile endpoints. The project includes user authentication, OTP verification, logging middleware, and a modular architecture for scalability.
 
-Primary goals:
+**Primary goals:**
 
-- Allow users to sign up and log in.
-- Issue JWT tokens for authenticated sessions (stored in cookies).
-- Provide a protected profile endpoint.
-- Persist users in a PostgreSQL database via Sequelize.
+- User registration and login with secure password handling
+- JWT-based authentication with HTTP-only cookies
+- OTP verification system for enhanced security
+- Protected endpoints for authenticated users
+- Comprehensive logging and request tracking
+- PostgreSQL database persistence via Sequelize
 
-## Sequence flow (runtime)
+## Sequence Flow (Runtime)
 
-This short section describes the key runtime sequence of the application from startup through a typical request lifecycle.
+This section describes the key runtime sequence of the application from startup through a typical request lifecycle.
 
-1. Startup
+### 1. Startup
 
-   - Node runs `src/main.js` (via `npm start` or `npm run dev`).
-   - `dotenv` loads environment variables.
-   - Express app is created, global middleware attached (body parsers, cookie parser, `logRequests`).
-   - Routers (`homeRouter`, `authRouter`) are mounted and the server listens on `PORT`.
+- Node runs `src/main.js` (via `npm start` or `npm run dev`)
+- `dotenv` loads environment variables from `.env` file
+- Express app is created with global middleware attached (body parsers, cookie parser, request logger)
+- Routers (`homeRouter`, `authRouter`) are mounted
+- Server listens on configured `PORT`
+- Sequelize database connection is established
 
-2. Incoming HTTP request
+### 2. Incoming HTTP Request
 
-   - Client sends an HTTP request to the server.
-   - Global middleware run in order: JSON/urlencoded body parsers -> cookie parser -> `logRequests`.
+- Client sends an HTTP request to the server
+- Global middleware execute in order:
+  1. JSON body parser
+  2. URL-encoded body parser
+  3. Cookie parser
+  4. Request logger (`logRequests`)
 
-3. Routing & protection
+### 3. Routing & Protection
 
-   - Express matches the route to a router and handler.
-   - If route is protected (e.g., `/profile`), `requireAuth` reads `token` from cookies and verifies the JWT using `JWT_SECRET`. On success `req.user` is set; otherwise a 401 is returned.
+- Express matches the route to a router and handler
+- If the route is protected (e.g., `/profile`), `requireAuth` middleware:
+  - Reads `token` from cookies
+  - Verifies the JWT using `JWT_SECRET`
+  - On success: sets `req.user` with decoded payload
+  - On failure: returns 401 Unauthorized
 
-4. Controller & DB
+### 4. Controller & Database
 
-   - Controller executes business logic (signup, login, profile) and uses the `Student` Sequelize model to interact with Postgres.
-   - Examples: signup hashes & stores password; login verifies password, signs JWT and sets cookie; profile fetches user by `req.user.id`.
+- Controller executes business logic (signup, login, profile)
+- Uses Sequelize models (`User`, `OTP`) to interact with PostgreSQL:
+  - **Signup**: validates input, hashes password with bcrypt, stores user record
+  - **Login**: verifies credentials, signs JWT token, sets HTTP-only cookie
+  - **OTP**: generates, sends, and verifies OTP for additional security
+  - **Profile**: retrieves authenticated user information
 
-5. Response & logging
-   - Controller sends JSON response, sets/clears cookies as needed, and the `Logger` records info/notice/error messages.
+### 5. Response & Logging
 
-Small ASCII flow:
+- Controller sends JSON response and sets/clears cookies as needed
+- `Logger` service records info, notice, and error messages
+- Response is sent back to client
 
-Client --> Express(main.js)
---> Middleware (parse, cookies, logger)
---> Router (/auth or /)
---> [requireAuth?] --> Controller --> Sequelize (Postgres)
---> Response (JSON, cookies)
+### Request Flow Diagram
+
+```
+Client
+  ↓
+Express Server (main.js)
+  ↓
+Global Middleware (parse, cookies, logger)
+  ↓
+Router (/auth or /)
+  ↓
+[requireAuth Middleware?]
+  ↓
+Controller (auth.js, home.js)
+  ↓
+Sequelize Models → PostgreSQL
+  ↓
+Response (JSON + Cookies)
 
 ## Tech Stack
 
-- Node.js (ES modules) + Express
-- Sequelize ORM (Postgres dialect)
+**Core Framework:**
+- Node.js (ES modules)
+- Express 5.1.0
+
+**Database:**
 - PostgreSQL
-- bcrypt for password hashing
-- jsonwebtoken for JWT
-- dotenv for environment configuration
-- nodemon for development
+- Sequelize 6.37.7 ORM
 
-Key files:
+**Authentication & Security:**
+- bcrypt 6.0.0 (password hashing)
+- jsonwebtoken 9.0.2 (JWT tokens)
+- cookie-parser 1.4.7 (session cookies)
 
-- `package.json` — scripts & dependencies
-- `src/main.js` — app entrypoint and routing
-- `src/controllers/*` — business logic (auth, home)
-- `src/routers/*` — Express routers
-- `src/models/student.model.js` — Sequelize model
-- `src/database/sequelize.js` — Sequelize connection
-- `src/middlewares/*` — auth and logging middleware
-- `src/utils/logger.service.js` — logging helper
-- `migrations/20230928-create-students-tbl.js` — migration to create `students_tbl`
-- `config/config.json` — DB config (development)
-- `Dockerfile` — present but currently empty (placeholder)
+**Configuration & Utilities:**
+- dotenv 17.2.3 (environment variables)
 
-## High-level Architecture
+**Development:**
+- nodemon 3.1.10 (auto-reload)
+- sequelize-cli 6.6.3 (migrations)
 
-1. Client (browser / mobile app) sends HTTP requests to the Express server.
-2. `src/main.js` sets up middleware (JSON body parser, urlencoded parser, cookie parser, and a request logger), mounts routers, and starts the server.
-3. Routers delegate requests to controllers:
-   - `homeRouter` handles `/` and `/profile` (profile is protected).
-   - `authRouter` handles `/auth/signup`, `/auth/login`, `/auth/logout`.
-4. Controllers use the Sequelize `Student` model to read/write user data in Postgres.
-5. Authentication: on successful login, the server signs a JWT (with id, useremail, role), sets it as an HTTP-only cookie named `token` (3-hour expiry). `requireAuth` middleware reads and verifies the cookie and attaches decoded payload to `req.user`.
-6. Logging: `Logger` class logs to console in non-production and to `logs/app.log` (append) in production/staging.
+### Key Project Files
 
-## Data Model
+```
 
-Student (Sequelize model `Student`, table `students_tbl`)
+src/
+├── main.js # Application entry point
+├── controllers/
+│ ├── auth.js # Auth business logic (signup, login, logout)
+│ └── home.js # Home/profile endpoints
+├── routers/
+│ ├── auth.js # /auth routes
+│ └── home.js # / and /profile routes
+├── models/
+│ ├── user.model.js # User model definition
+│ └── otp.model.js # OTP model definition
+├── middlewares/
+│ ├── auth.middleware.js # JWT verification (requireAuth)
+│ └── logger.middleware.js # Request logging
+├── utils/
+│ ├── auth.helper.js # Auth utilities
+│ └── logger.service.js # Centralized logging
+└── database/
+└── sequelize.js # Sequelize configuration & connection
 
-- id: UUID PK (default UUIDv4)
-- useremail: STRING, unique, not null
-- password: STRING, not null (hashed with bcrypt)
-- role: STRING, not null
-- additional_data: JSONB, nullable, default {}
-- timestamps: createdAt, updatedAt
+config/
+├── config.json # Database configuration
 
-Migration `migrations/20230928-create-students-tbl.js` creates this table with appropriate defaults.
+migrations/ # Database migrations
+
+logs/ # Application logs (production)
+
+Dockerfile # Container configuration
+
+## High-Level Architecture
+
+The application follows a clean, modular architecture:
+
+```
+┌─────────────────┐
+│ HTTP Client     │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────────────────────────┐
+│  Express Server (main.js)           │
+│  ├─ Global Middleware               │
+│  │  ├─ Body Parser (JSON/URL)      │
+│  │  ├─ Cookie Parser               │
+│  │  └─ Request Logger              │
+│  └─ Route Handlers                  │
+└─────────────────────────────────────┘
+         │
+    ┌────┴────┐
+    ▼         ▼
+┌──────────┐ ┌──────────┐
+│ /auth    │ │ / & /    │
+│ Router   │ │ profile  │
+└────┬─────┘ │ Router   │
+     │       └────┬─────┘
+     └───────┬────┘
+             ▼
+    ┌──────────────────┐
+    │ Controllers      │
+    │ ├─ auth.js       │
+    │ └─ home.js       │
+    └────────┬─────────┘
+             │
+      ┌──────┴──────┐
+      ▼             ▼
+┌──────────┐ ┌──────────────┐
+│Middleware│ │ Sequelize    │
+│├─ Auth   │ │ Models       │
+│└─ Logger │ │ ├─ User      │
+└──────────┘ │ └─ OTP       │
+             └────────┬─────┘
+                      ▼
+             ┌──────────────────┐
+             │  PostgreSQL DB   │
+             └──────────────────┘
+```
+
+### Request Flow
+
+1. **Authentication Flow:**
+
+   - Client sends credentials to `/auth/signup` or `/auth/login`
+   - Server validates credentials and generates JWT token
+   - Token stored in HTTP-only cookie with 3-hour expiry
+   - Client automatically sends cookie with subsequent requests
+
+2. **Protected Endpoints:**
+
+   - `requireAuth` middleware intercepts requests to protected routes
+   - Verifies JWT token from cookie
+   - Attaches decoded user data to `req.user`
+   - Allows request to proceed or returns 401 Unauthorized
+
+3. **OTP Verification:**
+
+   - Generated during sensitive operations
+   - Sent via email/SMS to user
+   - Verified before completing the operation
+   - Automatically expires after configurable duration
+
+4. **Logging:**
+   - All requests logged with timestamps and metadata
+   - Environment-aware: console in development, file in production
+   - Error tracking and monitoring for debugging
+
+## Data Models
+
+### User Model
+
+Sequelize model: `User` | Table: `users`
+
+**Fields:**
+
+- `id`: UUID, Primary Key (default UUIDv4)
+- `useremail`: STRING, unique, not null (user email address)
+- `password`: STRING, not null (bcrypt hashed)
+- `role`: STRING, not null (user role: 'customer', 'owner', 'admin')
+- `additional_data`: JSONB, nullable (flexible additional fields)
+- `createdAt`: TIMESTAMP
+- `updatedAt`: TIMESTAMP
+
+**Example:**
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "useremail": "user@example.com",
+  "role": "customer",
+  "additional_data": {
+    "phone": "+1234567890",
+    "address": "123 Main St"
+  },
+  "createdAt": "2025-01-15T10:30:00Z",
+  "updatedAt": "2025-01-15T10:30:00Z"
+}
+```
+
+### OTP Model
+
+Sequelize model: `OTP` | Table: `otps`
+
+**Fields:**
+
+- `id`: UUID, Primary Key
+- `useremail`: STRING, not null (recipient email)
+- `otp_code`: STRING, not null (6-digit code)
+- `expires_at`: TIMESTAMP (expiration time)
+- `verified`: BOOLEAN (default false)
+- `createdAt`: TIMESTAMP
+
+**Example:**
+
+```json
+{
+  "id": "650e8400-e29b-41d4-a716-446655440001",
+  "useremail": "user@example.com",
+  "otp_code": "123456",
+  "expires_at": "2025-01-15T10:40:00Z",
+  "verified": false
+}
+```
 
 ## API Endpoints
 
-1. GET /
+### Authentication Routes (`/auth`)
 
-   - Public. Returns a simple JSON welcome message.
-   - Handler: `homePage` in `src/controllers/home.js`.
+#### POST /auth/signup
 
-2. GET /profile
+Register a new user account.
 
-   - Protected. Requires `requireAuth` middleware.
-   - Returns the authenticated user's profile (id, useremail).
-   - Handler: `profile` in `src/controllers/home.js`.
+**Request:**
 
-3. POST /auth/signup
+```json
+{
+  "useremail": "user@example.com",
+  "password": "securePassword123",
+  "role": "customer"
+}
+```
 
-   - Public. Body: { useremail, password, role }
-   - Validates required fields. Returns 400 if missing or user already exists.
-   - Hashes password with bcrypt (10 rounds) and creates Student.
-   - Handler: `signup` in `src/controllers/auth.js`.
+**Response (201):**
 
-4. POST /auth/login
+```json
+{
+  "success": true,
+  "message": "User created successfully",
+  "user": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "useremail": "user@example.com",
+    "role": "customer"
+  }
+}
+```
 
-   - Public. Body: { useremail, password }
-   - Finds user by email, compares password with bcrypt.compare.
-   - On success, signs JWT with secret from env `JWT_SECRET`, sets cookie `token` with httpOnly, secure: false (should be true in production), maxAge ~3h.
-   - Handler: `login` in `src/controllers/auth.js`.
+#### POST /auth/login
 
-5. POST /auth/logout
-   - Clears the `token` cookie and returns success message.
-   - Handler: `logout` in `src/controllers/auth.js`.
+Authenticate user and establish session.
 
-## Authentication Flow
+**Request:**
 
-- Signup: client POSTs credentials to `/auth/signup`. Server hashes password and stores the user.
-- Login: client POSTs credentials to `/auth/login`. Server verifies credentials and signs a JWT:
-  - Payload: { id, useremail, role }
-  - Secret: `JWT_SECRET` env var
-  - Expiry: 3 hours
-  - Cookie: `res.cookie('token', token, { httpOnly: true, secure: false, maxAge: 3h })`
-- Protected endpoints use `requireAuth`, which reads `req.cookies.token`, verifies the JWT, and sets `req.user`.
+```json
+{
+  "useremail": "user@example.com",
+  "password": "securePassword123"
+}
+```
 
-Security notes:
+**Response (200):**
 
-- JWT stored in an HTTP-only cookie reduces XSS risk for token theft but is still subject to CSRF; consider CSRF protections (Double Submit Cookie or SameSite cookie flag).
-- `secure` is currently `false`. Change to `true` in production when using HTTPS.
-- Password hashing uses bcrypt with salt rounds = 10 (reasonable default).
-- JWT_SECRET must be strong and kept out of source control.
+```json
+{
+  "success": true,
+  "message": "Login successful",
+  "user": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "useremail": "user@example.com",
+    "role": "customer"
+  }
+}
+```
 
-## Logging
+**Cookies:** Sets `token` (JWT, 3-hour expiry, HTTP-only)
 
-- `src/utils/logger.service.js` implements a `Logger` class with methods `info`, `debug`, `notice`, `error`.
-- Behavior depends on `ENV` environment variable: in `production` or `staging` it writes JSON lines to `logs/app.log` and console; otherwise logs to console.
-- `logRequests` middleware logs method and originalUrl for every request.
+#### POST /auth/logout
 
-## Database & Migrations
+Terminate user session.
 
-- Database connection is defined in `src/database/sequelize.js` using `Sequelize(DB_NAME, DB_USER, DB_PASS, { host, port, dialect: 'postgres' })`.
-- `config/config.json` includes a development configuration (username `postgres`, password `skillmate`, database `postgres`, host `localhost`). The project also reads env variables via `dotenv`.
-- Migrations are done with `sequelize-cli` (dev dependency). `package.json` includes a `migrate` script: `npx sequelize-cli db:migrate`.
+**Response (200):**
 
-## Environment Variables (observed / expected)
+```json
+{
+  "success": true,
+  "message": "Logout successful"
+}
+```
 
-- PORT — server port
-- DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT — DB connection
-- JWT_SECRET — JWT signing secret
-- ENV or ENVIRONMENT — determines logger behaviour
+**Cookies:** Clears `token`
 
-## How to run (local / dev)
+### Home Routes (`/`)
 
-1. Install deps
+#### GET /
 
+Public homepage endpoint.
+
+**Response (200):**
+
+```json
+{
+  "message": "Welcome to Rental API"
+}
+```
+
+#### GET /profile
+
+Retrieve authenticated user profile (protected).
+
+**Headers:**
+
+```
+Cookie: token=<JWT_TOKEN>
+```
+
+**Response (200):**
+
+```json
+{
+  "success": true,
+  "user": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "useremail": "user@example.com",
+    "role": "customer",
+    "additional_data": {},
+    "createdAt": "2025-01-15T10:30:00Z"
+  }
+}
+```
+
+**Response (401):** If not authenticated
+
+```json
+{
+  "success": false,
+  "message": "Unauthorized"
+}
+```
+
+### Error Responses
+
+**400 Bad Request:**
+
+```json
+{
+  "success": false,
+  "message": "Validation error",
+  "errors": ["useremail is required", "password must be at least 8 characters"]
+}
+```
+
+**401 Unauthorized:**
+
+```json
+{
+  "success": false,
+  "message": "Invalid credentials"
+}
+```
+
+**500 Internal Server Error:**
+
+```json
+{
+  "success": false,
+  "message": "An error occurred",
+  "error": "error details"
+}
+```
+
+## Authentication & Security
+
+### JWT Token Flow
+
+1. **Signup:** User creates account with email and password
+
+   - Password hashed with bcrypt (10 salt rounds)
+   - User record stored in database
+
+2. **Login:** User submits credentials
+
+   - Server verifies email exists
+   - Password compared with bcrypt
+   - On success, JWT created with payload: `{ id, useremail, role }`
+   - Token signed with `JWT_SECRET` environment variable
+   - Token set as HTTP-only cookie with 3-hour expiry
+
+3. **Protected Requests:** Client sends subsequent requests
+   - Cookie automatically included in request
+   - `requireAuth` middleware verifies JWT signature
+   - Decoded user data attached to `req.user`
+   - Request proceeds to handler or returns 401
+
+### Security Considerations
+
+- **HTTP-only Cookies:** Protects against XSS token theft
+- **CSRF Protection:** Consider adding SameSite cookie flag and CSRF tokens
+- **HTTPS:** Use `secure: true` cookie flag in production with HTTPS
+- **Password Hashing:** bcrypt with 10 rounds provides strong security
+- **JWT Secret:** Must be strong, random, and kept in environment variables
+
+### Recommended Enhancements
+
+- Add rate limiting on `/auth/login` endpoint
+- Implement refresh tokens for extended sessions
+- Add brute-force protection
+- Implement password reset via secure tokens
+- Add email verification for new accounts
+
+## Logging System
+
+The `Logger` service provides structured logging throughout the application.
+
+### Logger Methods
+
+- `logger.info(message)` — Information level logs
+- `logger.debug(message)` — Detailed debug information
+- `logger.notice(message)` — Important notices
+- `logger.error(message, error)` — Error tracking
+
+### Environment-Based Behavior
+
+- **Development:** Logs to console only
+- **Production/Staging:** Logs to both console and `logs/app.log` (JSON format)
+
+### Request Logging
+
+All HTTP requests are automatically logged by the `logRequests` middleware with:
+
+- HTTP method
+- Original URL
+- Timestamp
+- Request metadata
+
+## Database Configuration
+
+### Connection Setup
+
+Database configuration defined in [config/config.json](config/config.json) and environment variables:
+
+**Environment Variables:**
+
+```
+DB_NAME=rental_db
+DB_USER=postgres
+DB_PASSWORD=your_secure_password
+DB_HOST=localhost
+DB_PORT=5432
+```
+
+**Connection Details:**
+
+- Dialect: PostgreSQL
+- ORM: Sequelize
+- Host: `localhost` (development) or via `DB_HOST`
+- Port: 5432 (development) or via `DB_PORT`
+
+### Migrations
+
+Sequelize-CLI manages database schema updates:
+
+```bash
+# Run all pending migrations
+npm run migrate
+
+# Generate a new migration file
+npm run migration:generate -- --name create_table_name
+```
+
+All migrations stored in `migrations/` directory.
+
+### Models
+
+Located in `src/models/`:
+
+- [user.model.js](src/models/user.model.js) — User table schema
+- [otp.model.js](src/models/otp.model.js) — OTP table schema
+
+## Environment Variables
+
+Create a `.env` file in the project root with the following variables:
+
+```env
+# Server Configuration
+PORT=3000
+ENVIRONMENT=development
+
+# Database Configuration
+DB_NAME=rental_db
+DB_USER=postgres
+DB_PASSWORD=your_secure_password
+DB_HOST=localhost
+DB_PORT=5432
+
+# Authentication
+JWT_SECRET=your-super-secret-jwt-key-change-in-production
+
+# Email Configuration (for OTP)
+EMAIL_SERVICE=gmail
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASSWORD=your-app-password
+
+# Application
+APP_URL=http://localhost:3000
+```
+
+**Important Notes:**
+
+- Never commit `.env` to version control
+- Change all secrets in production environment
+- Use strong, random JWT_SECRET (min 32 characters)
+- Email credentials should be app-specific passwords, not main account password
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js (v14 or higher)
+- PostgreSQL (v12 or higher)
+- npm or yarn
+
+### Installation
+
+1. **Clone the repository**
+
+   ```bash
+   git clone <repository-url>
+   cd Rental
+   ```
+
+2. **Install dependencies**
+
+   ```bash
    npm install
+   ```
 
-2. Create `.env` with at least:
+3. **Create `.env` file**
 
-   PORT=3000
-   DB_NAME=postgres
-   DB_USER=postgres
-   DB_PASSWORD=skillmate
-   DB_HOST=localhost
-   DB_PORT=5432
-   JWT_SECRET=your-secret
-   ENVIRONMENT=development
+   ```bash
+   cp .env.example .env
+   # Edit .env with your configuration
+   ```
 
-3. Run migrations (if using database):
+4. **Create database**
 
+   ```bash
+   createdb rental_db
+   ```
+
+5. **Run migrations**
+   ```bash
    npm run migrate
+   ```
 
-   (Requires sequelize-cli and a reachable Postgres instance.)
+### Development
 
-4. Start server (dev):
+Start development server with hot-reload:
 
-   npm run dev
+```bash
+npm run dev
+```
 
-5. Test endpoints with Postman / curl.
+Server runs on `http://localhost:3000`
 
-## Files Map (quick)
+### Production
 
-- `src/main.js` — bootstraps Express, middlewares, mounts routers, starts server.
-- `src/routers/auth.js` — routes: /auth/signup, /auth/login, /auth/logout
-- `src/routers/home.js` — routes: /, /profile
-- `src/controllers/auth.js` — login, logout, signup logic
-- `src/controllers/home.js` — home page, profile fetch
-- `src/models/student.model.js` — Student Sequelize model
-- `src/database/sequelize.js` — DB connection and testConnection helper
-- `src/middlewares/auth.middleware.js` — requireAuth (verifies JWT cookie)
-- `src/middlewares/logger.middleware.js` — logs each request
-- `src/utils/logger.service.js` — simple logging abstraction
-- `migrations/` — creates `students_tbl`
+Start production server:
 
-## Limitations & Recommendations / Next steps
+```bash
+npm start
+```
 
-1. Dockerfile is empty. Add a proper Dockerfile for containerized deployment.
-2. CSRF protection: currently using JWT in cookie—add SameSite, enable secure flag, and add CSRF protection.
-3. Error handling: add a global error handler middleware to standardize responses.
-4. Input validation: use a validation library (Joi, express-validator) to validate request bodies.
-5. Rate limiting & brute-force protections on /auth/login.
-6. Tests: add unit and integration tests (Jest + supertest).
-7. Add a health check endpoint and readiness/liveness probes for k8s.
-8. Consider refresh tokens or rotating tokens for longer sessions.
+### Testing with cURL
 
-## Quick design diagram (text)
+**Signup:**
 
-Client --> Express app (main.js)
---> middlewares: parse JSON, cookie parser, logRequests
---> routers
-/auth --> authController --> Student model --> Postgres
-/profile --> requireAuth (verify cookie JWT) --> Student.findByPk
+```bash
+curl -X POST http://localhost:3000/auth/signup \
+  -H "Content-Type: application/json" \
+  -d '{"useremail":"user@example.com","password":"password123","role":"customer"}'
+```
 
----
+**Login:**
 
-Generated from code in this repository. File references used while drafting:
+```bash
+curl -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"useremail":"user@example.com","password":"password123"}'
+```
 
-- `package.json`, `src/main.js`, `src/controllers/*.js`, `src/routers/*.js`, `src/models/student.model.js`, `src/database/sequelize.js`, `src/middlewares/*.js`, `src/utils/logger.service.js`, `config/config.json`, `migrations/20230928-create-students-tbl.js`.
+**Get Profile (authenticated):**
 
-If you'd like, I can:
+```bash
+curl -X GET http://localhost:3000/profile \
+  -H "Cookie: token=<your-jwt-token>"
+```
 
-- Add a README with run commands and environment variable template.
-- Fill in a production-ready `Dockerfile` and a sample `docker-compose.yml` for Postgres + app.
-- Add quick curl/Postman examples for each endpoint.
+**Logout:**
+
+```bash
+curl -X POST http://localhost:3000/auth/logout \
+  -H "Cookie: token=<your-jwt-token>"
+```
+
+## Project Structure
 
 ```
-Design doc created by analysis on project files.
+Rental/
+├── src/
+│   ├── main.js                         # Application entry point
+│   ├── controllers/
+│   │   ├── auth.js                     # Authentication logic (signup, login, logout)
+│   │   └── home.js                     # Home and profile endpoints
+│   ├── routers/
+│   │   ├── auth.js                     # /auth routes
+│   │   └── home.js                     # / and /profile routes
+│   ├── models/
+│   │   ├── user.model.js               # User model definition
+│   │   └── otp.model.js                # OTP model definition
+│   ├── middlewares/
+│   │   ├── auth.middleware.js          # JWT verification middleware
+│   │   └── logger.middleware.js        # Request logging middleware
+│   ├── utils/
+│   │   ├── auth.helper.js              # Authentication helper functions
+│   │   └── logger.service.js           # Centralized logging service
+│   └── database/
+│       └── sequelize.js                # Sequelize connection & configuration
+├── config/
+│   └── config.json                     # Database configuration
+├── migrations/                          # Database migration files
+├── logs/                                # Application logs (production)
+├── .env                                 # Environment variables (not in repo)
+├── .env.example                         # Example environment template
+├── package.json                         # Project dependencies & scripts
+├── Dockerfile                           # Docker container configuration
+├── docker-compose.yml                   # Docker compose (if applicable)
+└── README.md                            # This file
 ```
+
+## Roadmap & Future Enhancements
+
+### Current Features
+
+- ✅ User authentication (signup/login/logout)
+- ✅ JWT token-based sessions
+- ✅ Password hashing with bcrypt
+- ✅ OTP support model
+- ✅ Request logging
+- ✅ PostgreSQL integration
+
+### Planned Features
+
+- 🔲 Email verification for new accounts
+- 🔲 Password reset via email
+- 🔲 Rate limiting and brute-force protection
+- 🔲 Refresh token rotation
+- 🔲 Two-factor authentication (2FA)
+- 🔲 Role-based access control (RBAC)
+- 🔲 API documentation with Swagger
+- 🔲 Unit and integration tests
+- 🔲 Docker containerization
+- 🔲 Health check and monitoring endpoints
+- 🔲 CORS configuration
+- 🔲 Request validation with Joi/Express-validator
+
+### Known Limitations
+
+- No input validation library currently integrated
+- No global error handling middleware
+- CSRF protection not implemented
+- No refresh token mechanism
+- Limited rate limiting
+
+## Troubleshooting
+
+### Database Connection Errors
+
+**Error:** `connect ECONNREFUSED 127.0.0.1:5432`
+
+**Solution:**
+
+1. Ensure PostgreSQL is running
+2. Check `DB_HOST` and `DB_PORT` in `.env`
+3. Verify database exists: `psql -l`
+4. Create database if missing: `createdb rental_db`
+
+### JWT Token Errors
+
+**Error:** `JsonWebTokenError: invalid signature`
+
+**Solution:**
+
+1. Ensure `JWT_SECRET` is set in `.env`
+2. Token may be corrupted or signed with different secret
+3. Check cookie value in browser
+
+### Port Already in Use
+
+**Error:** `Error: listen EADDRINUSE: address already in use :::3000`
+
+**Solution:**
+
+1. Kill process on port 3000: `lsof -ti :3000 | xargs kill -9` (Linux/Mac)
+2. Change `PORT` in `.env` to unused port
+3. Use `netstat -ano | findstr :3000` (Windows) to find PID
+
+### Environment Variables Not Loading
+
+**Error:** Variables like `JWT_SECRET` are undefined
+
+**Solution:**
+
+1. Ensure `.env` file exists in project root
+2. Verify variables are set correctly
+3. Restart server after `.env` changes
+4. Check for typos in variable names
+
+## Contributing
+
+1. Create a feature branch: `git checkout -b feature/your-feature`
+2. Make changes and test thoroughly
+3. Commit with meaningful messages: `git commit -am 'Add feature'`
+4. Push to branch: `git push origin feature/your-feature`
+5. Create Pull Request
+
+## Support
+
+For issues, questions, or contributions:
+
+- Create an issue in the repository
+- Contact the development team
+- Check existing documentation
+
+## License
+
+This project is licensed under ISC License. See package.json for details.

@@ -1,25 +1,40 @@
 import { Sequelize } from "sequelize";
 import dotenv from "dotenv";
+import { neon } from "@neondatabase/serverless";
+
 dotenv.config();
 
-const DB_NAME = process.env.DB_NAME;
-const DB_USER = process.env.DB_USER;
-const DB_PASS = process.env.DB_PASSWORD;
-const DB_HOST = process.env.DB_HOST;
-const DB_PORT = process.env.DB_PORT;
+const DATABASE_URL = process.env.DATABASE_URL;
 
-export const sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASS, {
-  host: DB_HOST,
-  port: DB_PORT,
+if (!DATABASE_URL) {
+  throw new Error("DATABASE_URL environment variable is not set");
+}
+
+// Initialize Neon connection
+export const sql = neon(DATABASE_URL);
+
+// Initialize Sequelize with Neon PostgreSQL
+export const sequelize = new Sequelize(DATABASE_URL, {
   dialect: "postgres",
   logging: false,
+  pool: {
+    max: 1,
+    min: 1,
+    idle: 0,
+  },
+  define: {
+    timestamps: true,
+  },
 });
 
 export const testConnection = async () => {
   try {
+    console.log("\n[Database] Testing connection to Neon PostgreSQL...");
     await sequelize.authenticate();
-    console.log("Connection to PostgreSQL has been established successfully.");
+    await sql`SELECT version()`;
+    console.log("[Database] ✓ Neon SQL connection successful");
   } catch (error) {
-    console.error("Unable to connect to the database:", error);
+    console.error("[Database] ✗ Connection failed:", error.message);
+    throw error;
   }
 };

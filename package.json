@@ -14,7 +14,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@prelude.so/sdk": "^1.0.0",
+    "@neondatabase/serverless": "^0.9.2",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
     "cookies-parser": "^1.2.0",
