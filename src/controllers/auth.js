@@ -1,86 +1,101 @@
-import { Student } from "../models/student.model.js";
+import { User } from "../models/user.model.js";
 import { Logger } from "../utils/logger.service.js";
-import bcrypt from "bcrypt";
+import {
+  generateToken,
+  buildUserResponse,
+  checkUserExists,
+} from "../utils/auth.helper.js";
 import dotenv from "dotenv";
-import jwt from "jsonwebtoken";
 
 dotenv.config();
-const JWT_SECRET = process.env.JWT_SECRET;
 const logger = new Logger("Auth Controller");
 
-export function logout(req, res) {
-  res.clearCookie("token");
-  logger.info(`Logged out successfully`);
-  res.json({ message: "Logged out successfully" });
-}
-
-export async function login(req, res) {
-  const { useremail, password } = req.body;
+// ============================================================
+// SIGNUP FLOWS
+// ============================================================
+export async function registerUser(req, res) {
+  const { phone, useremail, name, role } = req.body;
 
   try {
-    const user = await Student.findOne({ where: { useremail } });
-    if (!user) {
-      logger.info(`No record found in database for user ${useremail}`);
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) {
-      logger.notice(`Invalid credentials for user ${useremail}`);
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
+    const userDetail = await checkUserExists(phone);
+    if (userDetail)
+      return res.status(409).json({
+        success: false,
+        message: "User already exists.",
+      });
 
-    // generate JWT
-    const token = jwt.sign(
-      { id: user.id, useremail: user.useremail, role: user.role },
-      JWT_SECRET,
-      { expiresIn: "3h" }
-    );
+    // Create user in database
+    const newUser = await User.create({
+      phone,
+      useremail,
+      name,
+      role,
+      additional_data: {},
+    });
 
-    // set cookie
+    // Generate JWT token
+    const token = generateToken(newUser);
+
+    // Set token in cookie
     res.cookie("token", token, {
       httpOnly: true,
-      secure: false, // true in production with HTTPS
-      maxAge: 3000 * 60 * 60, // 3 hour
+      secure: false,
+      maxAge: 3 * 60 * 60 * 1000,
     });
-    logger.info(`Login success for user ${useremail}`);
-    res.json({ message: "Login successful" });
-  } catch (err) {
-    logger.error(`Failed to login, ${err}`);
-    res.status(500).json({ message: "Server error" });
+
+    logger.info(`User registered successfully: ${useremail}`);
+    return res.status(201).json({
+      success: true,
+      message: "User registered successfully",
+      data: {
+        user: buildUserResponse(newUser),
+      },
+    });
+  } catch (error) {
+    logger.error(`Signup - Error: ${error.message}`);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
 }
 
-export async function signup(req, res) {
-  const { useremail, password, role } = req.body;
-
-  if (!useremail || !password) {
-    logger.notice(`Failed to signup: Missing required details`);
-    return res.status(400).json({ message: "useremail and password required" });
-  }
-
+// ============================================================
+// LOGIN FLOWS
+// ============================================================
+export async function getRegisteredUserDetails(req, res) {
+  const { phone } = req.body;
   try {
-    // check if user exists
-    const existing = await Student.findOne({ where: { useremail } });
-    if (existing) {
-      logger.info(`${useremail} User already exists.`);
-      return res.status(400).json({ message: "User already exists" });
-    }
-
-    // hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // insert into DB
-    await Student.create({
-      useremail,
-      password: hashedPassword,
-      role,
-      additional_data: { created_via: "signup" },
+    const userDetail = await checkUserExists(phone);
+    if (!userDetail)
+      return res.status(404).json({
+        success: false,
+        message: "User not found.",
+      });
+    return res.status(200).json({
+      success: true,
+      message: "User found",
+      data: {
+        user: buildUserResponse(userDetail),
+      },
     });
-
-    logger.info(`${useremail} registered in database.`);
-    res.json({ message: "Signup successful" });
-  } catch (err) {
-    logger.error(`Failed to Signup: ${err}`);
-    res.status(500).json({ message: "Server error" });
+  } catch (error) {
+    logger.error(`getUserLoginDetails failed. Error: ${error.message}`);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
+}
+
+/**
+ * Logout user
+ */
+export function logout(req, res) {
+  res.clearCookie("token");
+  logger.info(`User logged out successfully`);
+  res.status(200).json({
+    success: true,
+    message: "Logged out successfully",
+  });
 }

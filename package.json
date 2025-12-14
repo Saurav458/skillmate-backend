@@ -7,16 +7,18 @@
   "scripts": {
     "start": "node src/main.js",
     "dev": "nodemon src/main.js",
-    "migrate": "npx sequelize-cli db:migrate"
+    "migrate": "npx sequelize-cli db:migrate",
+    "migration:generate": "npx sequelize-cli migration:generate --name $NAME"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@prelude.so/sdk": "^1.0.0",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
     "cookies-parser": "^1.2.0",
-    "dotenv": "^17.2.2",
+    "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "nodemon": "^3.1.10",

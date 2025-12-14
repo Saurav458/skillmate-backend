@@ -1,13 +1,21 @@
 import express from "express";
-import { login, logout, signup } from "../controllers/auth.js";
+import {
+  registerUser,
+  getRegisteredUserDetails,
+  logout,
+} from "../controllers/auth.js";
 
 export const authRouter = express.Router();
 
-// Signup
-authRouter.post("/signup", signup);
-
-// Login
-authRouter.post("/login", login);
-
-// Logout
+// ============================================================
+// SIGNUP ROUTES
+// ============================================================
+authRouter.post("/signup/", registerUser);
+// ============================================================
+// LOGIN ROUTES
+// ============================================================
+authRouter.post("/login", getRegisteredUserDetails);
+// ============================================================
+// COMMON ROUTES
+// ============================================================
 authRouter.post("/logout", logout);

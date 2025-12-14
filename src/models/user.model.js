@@ -1,23 +1,28 @@
 import { DataTypes, Model } from "sequelize";
 import { sequelize } from "../database/sequelize.js";
 
-export class Student extends Model {}
+export class User extends Model {}
 
-Student.init(
+User.init(
   {
     id: {
       type: DataTypes.UUID,
       defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
     },
+    name: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
     useremail: {
       type: DataTypes.STRING,
       allowNull: false,
       unique: true,
     },
-    password: {
-      type: DataTypes.STRING,
+    phone: {
+      type: DataTypes.BIGINT,
       allowNull: false,
+      unique: true,
     },
     role: {
       type: DataTypes.STRING,
@@ -31,8 +36,8 @@ Student.init(
   },
   {
     sequelize,
-    modelName: "Student",
-    tableName: "students_tbl",
+    modelName: "User",
+    tableName: "users_tbl",
     timestamps: true,
   }
 );
