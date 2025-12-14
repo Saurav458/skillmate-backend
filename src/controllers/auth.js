@@ -132,12 +132,18 @@ export async function getRegisteredUserDetails(req, res) {
       phone,
       userId: userDetail.id,
     });
+
+    const token = generateToken(userDetail);
+    // Set token in cookie
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: false,
+      maxAge: 3 * 60 * 60 * 1000,
+    });
+
     return res.status(200).json({
       success: true,
       message: "User found",
-      data: {
-        user: buildUserResponse(userDetail),
-      },
     });
   } catch (error) {
     logger.error(`Login verification failed - ${error.message}`, {

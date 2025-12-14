@@ -32,6 +32,7 @@ export function generateToken(user) {
       useremail: user.useremail,
       phone: user.phone,
       role: user.role,
+      name: user.name,
     },
     JWT_SECRET,
     { expiresIn: "3h" }
