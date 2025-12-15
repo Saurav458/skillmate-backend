@@ -20,7 +20,7 @@ export async function registerUser(req, res) {
     phone,
     useremail,
     name,
-    role,
+    // role,
   });
 
   try {
@@ -30,7 +30,7 @@ export async function registerUser(req, res) {
         phone,
         useremail,
         name,
-        role,
+        // role,
       });
       return res.status(400).json({
         success: false,
@@ -56,7 +56,7 @@ export async function registerUser(req, res) {
       phone,
       useremail,
       name,
-      role,
+      // role: 0,
       additional_data: {},
     });
     logger.debug(`User created successfully in database`, {

@@ -29,12 +29,16 @@ app.use(logRequests);
 // Routes
 app.use("/", homeRouter);
 app.use("/auth", authRouter);
+const isProd = process.env.NODE_ENV === "production";
+console.log("isorp",isProd)
 
 // Start server only after DB is ready
 const startServer = async () => {
   try {
     await testConnection();
-    sequelize.sync({ alter: true });
+    if (!isProd) {
+      sequelize.sync({ alter: true });
+    }
     app.listen(PORT, () => {
       logger.info(`✓ Server running on port ${PORT}`);
     });
