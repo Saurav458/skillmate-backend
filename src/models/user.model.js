@@ -26,7 +26,7 @@ User.init(
     },
     role: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     additional_data: {
       type: DataTypes.JSONB,

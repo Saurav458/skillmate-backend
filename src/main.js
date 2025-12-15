@@ -1,6 +1,7 @@
 import express from "express";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
+import cors from "cors";
 import { authRouter } from "./routers/auth.js";
 import { homeRouter } from "./routers/home.js";
 import { Logger } from "./utils/logger.service.js";
@@ -14,6 +15,12 @@ const logger = new Logger("Main");
 const PORT = process.env.PORT;
 
 // Middlewares
+app.use(
+  cors({
+    origin: true,
+    credentials: true, // Allow cookies to be sent
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());

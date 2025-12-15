@@ -25,7 +25,7 @@ export async function registerUser(req, res) {
 
   try {
     // Validate required fields
-    if (!phone || !useremail || !name || !role) {
+    if (!phone || !useremail || !name) {
       logger.warn(`Registration failed - Missing required fields`, {
         phone,
         useremail,
